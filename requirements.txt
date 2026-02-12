@@ -4,5 +4,3 @@ streamlit-mic-recorder
 gTTS
 streamlit-mic-recorder
 gTTS
-requests
-Pillow
