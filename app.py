@@ -2,145 +2,142 @@ import streamlit as st
 from groq import Groq
 from streamlit_mic_recorder import mic_recorder
 from gtts import gTTS
-import io
-import os
-import base64
+import io, os, base64, json
 from PIL import Image
+from duckduckgo_search import DDGS
 
-# --- 1. SETUP & THEME ---
-st.set_page_config(page_title="Nexus AI Multilingual", page_icon="🧠", layout="wide")
+# --- 1. SETUP & PERSISTENT MEMORY ---
+st.set_page_config(page_title="Nexus Ultra AI", page_icon="🧬", layout="wide")
 
+# Persistent Memory Initialization
+if "memory" not in st.session_state:
+    st.session_state.memory = "The user is new. Be professional and adaptive."
+if "chat_count" not in st.session_state:
+    st.session_state.chat_count = 0
+
+# --- 2. NEXUS STYLE INJECTION ---
 def get_base64(bin_file):
     with open(bin_file, 'rb') as f:
         data = f.read()
     return base64.b64encode(data).decode()
 
-# APPLYING YOUR ATTACHED STYLE (Background only)
-# Make sure your image file is named 'nexus_bg.jpg' in your project folder
 if os.path.exists("nexus_bg.jpg"):
     bin_str = get_base64("nexus_bg.jpg")
-    page_bg_img = f'''
-    <style>
-    .stApp {{
-        background-image: url("data:image/png;base64,{bin_str}");
-        background-size: cover;
-        background-attachment: fixed;
-    }}
-    [data-testid="stHeader"] {{
-        background: rgba(0,0,0,0);
-    }}
-    [data-testid="stSidebar"] {{
-        background: rgba(0,0,0,0.5);
-    }}
-    </style>
-    '''
-    st.markdown(page_bg_img, unsafe_allow_html=True)
+    st.markdown(f'''
+        <style>
+        .stApp {{ background-image: url("data:image/png;base64,{bin_str}"); background-size: cover; background-attachment: fixed; }}
+        [data-testid="stHeader"] {{ background: rgba(0,0,0,0); }}
+        [data-testid="stSidebar"] {{ background: rgba(0,0,0,0.6); backdrop-filter: blur(10px); color: white; }}
+        .stMarkdown {{ color: #e0f2f1; text-shadow: 1px 1px 2px black; }}
+        </style>
+    ''', unsafe_allow_html=True)
 
-# Ensure API Key is present
+# API Setup
 if 'GROQ_API_KEY' not in st.secrets:
     st.error("Please add GROQ_API_KEY to your Streamlit Secrets.")
     st.stop()
 
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
-# --- 2. SIDEBAR ---
+# --- 3. CORE TOOLS (Knowledge & Learning) ---
+
+def web_search(query):
+    """Accesses the 2026 internet for real-time knowledge."""
+    with DDGS() as ddgs:
+        results = [r for r in ddgs.text(query, max_results=3)]
+        return "\n".join([f"Source: {r['title']} - {r['body']}" for r in results])
+
+def consolidate_memory(new_chat):
+    """Self-Learning: Updates the AI's internal profile of the user."""
+    st.session_state.chat_count += 1
+    if st.session_state.chat_count % 3 == 0: # Learn every 3 messages
+        prompt = f"Based on this conversation: '{new_chat}', update the user's preference profile. Current Memory: {st.session_state.memory}"
+        update = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "system", "content": "Update the memory summary concisely."}, {"role": "user", "content": prompt}]
+        )
+        st.session_state.memory = update.choices[0].message.content
+
+# --- 4. SIDEBAR ---
 with st.sidebar:
     st.title("Nexus Control")
-    mode = st.radio("Select Mode:", ["🎙️ Voice Chat", "💬 Text Chat", "👁️ Vision Chat", "🎨 Art Studio"])
-    language = st.selectbox("Conversation Language:", ["English", "Urdu"])
+    mode = st.radio("Select Skill:", ["💬 Smart Chat", "🌍 Web Search", "🎙️ Voice Mode", "👁️ Vision", "🎨 Art Studio"])
+    language = st.selectbox("Language:", ["English", "Urdu"])
     st.divider()
-    # Updated verification info for 2026
-    st.info("Verified: Llama 3.3 (Text) + Llama 4 Scout (Vision)")
+    st.subheader("Memory Status")
+    st.caption(st.session_state.memory)
+    st.info("Core: Llama 4 Maverick (128e)")
 
 lang_code = "en" if language == "English" else "ur"
 
-# --- 3. VOICE CHAT ENGINE ---
-if mode == "🎙️ Voice Chat":
-    st.title(f"🎙️ Voice Chat ({language})")
-    audio = mic_recorder(start_prompt="Click to Speak 🎤", stop_prompt="Stop & Process ⏹️", key='recorder')
-    if audio:
-        with st.spinner("Listening..."):
-            try:
-                audio_file = ("audio.wav", audio['bytes'], "audio/wav")
-                transcription = client.audio.transcriptions.create(
-                    file=audio_file, model="whisper-large-v3", language=lang_code, response_format="text"
-                )
-                user_text = transcription
-                st.info(f"You said: {user_text}")
+# --- 5. SKILL MODULES ---
 
-                completion = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=[
-                        {"role": "system", "content": f"Reply in {language} only."},
-                        {"role": "user", "content": user_text}
-                    ]
-                )
-                ai_response = completion.choices[0].message.content
-                st.success(f"AI: {ai_response}")
-
-                with st.spinner("Generating Voice..."):
-                    tts = gTTS(text=ai_response, lang=lang_code)
-                    audio_fp = io.BytesIO()
-                    tts.write_to_fp(audio_fp)
-                    st.audio(audio_fp, format="audio/mp3", autoplay=True)
-            except Exception as e:
-                st.error(f"Voice Error: {str(e)}")
-
-# --- 4. TEXT CHAT MODE ---
-elif mode == "💬 Text Chat":
-    st.title(f"💬 Text Chat ({language})")
+# A. SMART CHAT & WEB SEARCH (Combined Power)
+if mode in ["💬 Smart Chat", "🌍 Web Search"]:
+    st.title(f"{mode} ({language})")
     if "messages" not in st.session_state: st.session_state.messages = []
+    
     for m in st.session_state.messages:
         with st.chat_message(m["role"]): st.markdown(m["content"])
 
-    if prompt := st.chat_input("Type here..."):
+    if prompt := st.chat_input("Ask me anything..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
+
         with st.chat_message("assistant"):
+            context = ""
+            if mode == "🌍 Web Search":
+                with st.spinner("Searching the 2026 Internet..."):
+                    context = web_search(prompt)
+            
             response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "system", "content": f"Reply in {language}"}] + 
-                         [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
+                model="meta-llama/llama-4-maverick-17b-128e-instruct",
+                messages=[
+                    {"role": "system", "content": f"You are Nexus, a 2026 Super-AI. User Profile: {st.session_state.memory}. Search Context: {context}. Reply in {language}."},
+                ] + [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
             )
-            full_res = response.choices[0].message.content
-            st.markdown(full_res)
-            st.session_state.messages.append({"role": "assistant", "content": full_res})
+            res_text = response.choices[0].message.content
+            st.markdown(res_text)
+            st.session_state.messages.append({"role": "assistant", "content": res_text})
+            consolidate_memory(prompt)
 
-# --- 5. VISION CHAT (FIXED MODEL) ---
-elif mode == "👁️ Vision Chat":
+# B. VISION (Llama 4 Scout)
+elif mode == "👁️ Vision":
     st.title("👁️ Nexus Vision")
-    uploaded_file = st.file_uploader("Upload an image...", type=["jpg", "jpeg", "png"])
-    if uploaded_file:
-        image = Image.open(uploaded_file)
-        st.image(image, width=400)
-        user_question = st.text_input("Ask about this image:")
-        if st.button("🔍 Analyze Image"):
-            with st.spinner("Processing with Llama 4 Scout..."):
-                try:
-                    buffered = io.BytesIO()
-                    if image.mode != "RGB": image = image.convert("RGB")
-                    image.save(buffered, format="JPEG")
-                    img_str = base64.b64encode(buffered.getvalue()).decode()
-                    
-                    # UPDATED TO LLAMA 4 SCOUT (LATEST 2026 VISION MODEL)
-                    chat_completion = client.chat.completions.create(
-                        model="meta-llama/llama-4-scout-17b-16e-instruct",
-                        messages=[{
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": user_question},
-                                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_str}"}}
-                            ]
-                        }]
-                    )
-                    st.success(chat_completion.choices[0].message.content)
-                except Exception as e:
-                    st.error(f"API Error: {e}")
+    file = st.file_uploader("Upload Image", type=["jpg", "png"])
+    if file:
+        img = Image.open(file)
+        st.image(img, width=400)
+        q = st.text_input("Analyze:")
+        if st.button("See"):
+            buffered = io.BytesIO()
+            img.convert("RGB").save(buffered, format="JPEG")
+            img_b64 = base64.b64encode(buffered.getvalue()).decode()
+            res = client.chat.completions.create(
+                model="meta-llama/llama-4-scout-17b-16e-instruct",
+                messages=[{"role": "user", "content": [
+                    {"type": "text", "text": q},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}
+                ]}]
+            )
+            st.success(res.choices[0].message.content)
 
-# --- 6. ART STUDIO ---
+# C. VOICE MODE (Whisper V3 + gTTS)
+elif mode == "🎙️ Voice Mode":
+    st.title("🎙️ Voice Chat")
+    audio = mic_recorder(start_prompt="Speak 🎤", stop_prompt="Stop ⏹️", key='vox')
+    if audio:
+        transcription = client.audio.transcriptions.create(file=("a.wav", audio['bytes']), model="whisper-large-v3", language=lang_code)
+        st.info(f"You: {transcription.text}")
+        reply = client.chat.completions.create(model="meta-llama/llama-4-maverick-17b-128e-instruct", messages=[{"role":"user", "content": transcription.text}])
+        st.success(f"Nexus: {reply.choices[0].message.content}")
+        tts = gTTS(text=reply.choices[0].message.content, lang=lang_code)
+        fp = io.BytesIO(); tts.write_to_fp(fp)
+        st.audio(fp, autoplay=True)
+
+# D. ART STUDIO
 elif mode == "🎨 Art Studio":
-    st.title("🎨 Art Studio")
-    prompt = st.text_input("Describe the image:")
+    st.title("🎨 Imagine")
+    p = st.text_input("Describe visual:")
     if st.button("Generate"):
-        url = f"https://image.pollinations.ai/prompt/{prompt}?nologo=true"
-        st.image(url)
+        st.image(f"https://image.pollinations.ai/prompt/{p}?nologo=true&seed={st.session_state.chat_count}")
