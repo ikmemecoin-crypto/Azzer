@@ -3,3 +3,4 @@ groq
 streamlit-mic-recorder
 gTTS
 Pillow
+duckduckgo-search
