@@ -6,3 +6,4 @@ Pillow
 duckduckgo-search
 requests
 geocoder
+pandas
