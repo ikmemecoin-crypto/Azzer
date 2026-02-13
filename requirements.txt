@@ -2,6 +2,7 @@ streamlit
 groq
 gTTS
 streamlit-mic-recorder
+Pillow
+duckduckgo-search
 requests
 geocoder
-Pillow
