@@ -5,6 +5,7 @@ from gtts import gTTS
 import io, os, sys, json, requests, time, pandas as pd
 from PIL import Image
 from io import StringIO
+from duckduckgo_search import DDGS
 
 # --- 1. SYSTEM INITIALIZATION & THEME ENGINE ---
 st.set_page_config(page_title="Nexus Sovereign Pro", page_icon="🔵", layout="wide")
@@ -149,3 +150,20 @@ elif mode == "💻 Code Lab":
 elif mode == "🗺️ Live Map":
     st.title("Sovereign Geography")
     st.components.v1.iframe(f"https://www.google.com/maps?q={loc_data['city']}&output=embed", height=500)
+
+# VISION (RESTORED)
+elif mode == "👁️ Vision":
+    st.title("Visual Intelligence")
+    v_file = st.file_uploader("Upload Image", type=['jpg', 'png', 'jpeg'])
+    if v_file:
+        img = Image.open(v_file)
+        st.image(img, use_container_width=True)
+        st.info("Visual Cortex Active: Analyzing Patterns...")
+
+# VOICE (RESTORED)
+elif mode == "🎙️ Voice":
+    st.title("Voice Command")
+    audio = mic_recorder(start_prompt="🎤 Speak", stop_prompt="⏹️ Process")
+    if audio:
+        trans = client.audio.transcriptions.create(file=("v.wav", audio['bytes']), model="whisper-large-v3")
+        st.success(f"Heard: {trans.text}")
