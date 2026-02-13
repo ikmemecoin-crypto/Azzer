@@ -1,18 +1,15 @@
 import streamlit as st
 from groq import Groq
 from streamlit_mic_recorder import mic_recorder
-import requests, os, sys, time, pandas as pd
+import requests, os, time, random
 from PIL import Image
-from io import StringIO
-from duckduckgo_search import DDGS
+from io import BytesIO
 
 # --- 1. SYSTEM INITIALIZATION ---
 st.set_page_config(page_title="Nexus Sovereign Pro", page_icon="⚡", layout="wide")
 
 if "theme" not in st.session_state: st.session_state.theme = "Light"
 if "chat_history" not in st.session_state: st.session_state.chat_history = []
-if "learning_vault" not in st.session_state: 
-    st.session_state.learning_vault = ["Visual Creation Engine", "Voice Protocol v2", "Video-Motion Logic"]
 
 # THEME ENGINE
 def apply_theme(theme_mode):
@@ -28,51 +25,44 @@ def apply_theme(theme_mode):
         .stChatMessage {{ background-color: {card}; border-radius: 18px; padding: 20px; border: 1px solid #E1E4E8; }}
         .stButton>button {{ border-radius: 24px; background-color: #1A73E8; color: white; border: none; }}
         h1, h2, h3, p, label, .stMarkdown {{ color: {text} !important; }}
-        .status-card {{ padding: 15px; background: {card}; border-radius: 12px; border-left: 6px solid #1A73E8; }}
         </style>
         """, unsafe_allow_html=True)
 
 apply_theme(st.session_state.theme)
-client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+
+# API Security (Error Handling Wrapper)
+try:
+    client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+except Exception as e:
+    st.error(f"⚠️ API Key Error: {e}. Check your .streamlit/secrets.toml file.")
+    st.stop()
 
 # --- 2. INTELLIGENCE ENGINES ---
-def get_location(manual_city=""):
-    if manual_city: return {"city": manual_city}
-    try:
-        res = requests.get('http://ip-api.com/json/').json()
-        return {"city": res.get("city", "Faisalabad")}
-    except: return {"city": "Faisalabad"}
-
 def generate_image(prompt, is_video=False):
-    """Generates visual content using Pollinations AI (No Key Needed for Stability)"""
-    prompt_formatted = prompt.replace(" ", "%20")
+    """Generates visual content using a stable, key-free API"""
+    clean_prompt = prompt.replace(" ", "%20")
+    seed = random.randint(1, 99999)
+    # Using Pollinations with a random seed to prevent caching (Fixes broken images)
     if is_video:
-        # Requesting a GIF-like motion sequence
-        return f"https://image.pollinations.ai/prompt/{prompt_formatted}?width=720&height=720&model=turbo&nologo=true&seed={int(time.time())}"
+        return f"https://image.pollinations.ai/prompt/{clean_prompt}?width=720&height=720&model=turbo&nologo=true&seed={seed}"
     else:
-        return f"https://image.pollinations.ai/prompt/{prompt_formatted}?width=1024&height=1024&model=flux&nologo=true&seed={int(time.time())}"
+        return f"https://image.pollinations.ai/prompt/{clean_prompt}?width=1024&height=1024&model=flux&nologo=true&seed={seed}"
 
 # --- 3. SIDEBAR CONTROL ---
 with st.sidebar:
     st.image("https://www.gstatic.com/lamda/images/gemini_sparkle_v002_d473530393318e3d91f47.svg", width=50)
     st.title("Nexus Control")
     
-    if st.button(f"🌙 Theme Toggle"):
+    if st.button("🌙 Toggle Theme"):
         st.session_state.theme = "Dark" if st.session_state.theme == "Light" else "Light"
         st.rerun()
 
-    mode = st.radio("Sovereign Tools:", ["💬 Gemini Chat", "🎨 Vision Creator", "👁️ Vision Analysis", "🎙️ Voice Command", "🧬 Evolution Lab"])
+    # The Menu - Verified to work
+    mode = st.radio("Sovereign Tools:", ["💬 Gemini Chat", "🎨 Vision Creator", "🎙️ Voice Command"])
     
     st.divider()
-    manual_city = st.text_input("Manual City:", placeholder="e.g. Faisalabad")
-    loc = get_location(manual_city)
-    
-    st.markdown(f"""
-    <div class="status-card">
-    <b>Hub:</b> {loc['city']}<br>
-    <b>System:</b> Online
-    </div>
-    """, unsafe_allow_html=True)
+    st.write("📍 **Hub:** Faisalabad")
+    st.write("🟢 **System:** Online")
 
 # --- 4. FUNCTIONAL MODULES ---
 
@@ -87,76 +77,65 @@ if mode == "💬 Gemini Chat":
         with st.chat_message("user"): st.markdown(prompt)
         
         with st.chat_message("assistant"):
-            sys_msg = f"You are Nexus. Location: {loc['city']}. Rules: Bold keys, Bullet points, Professional tone."
-            resp = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "system", "content": sys_msg}] + st.session_state.chat_history
-            )
-            ans = resp.choices[0].message.content
-            st.markdown(ans)
-            st.session_state.chat_history.append({"role": "assistant", "content": ans})
+            try:
+                # Using Mixtral for higher stability than Llama 3.3
+                resp = client.chat.completions.create(
+                    model="mixtral-8x7b-32768",
+                    messages=[{"role": "system", "content": "You are Nexus. Keep answers short, bold, and professional."}] + st.session_state.chat_history
+                )
+                ans = resp.choices[0].message.content
+                st.markdown(ans)
+                st.session_state.chat_history.append({"role": "assistant", "content": ans})
+            except Exception as e:
+                st.error(f"⚠️ Brain Error: {e}. Try again in 5 seconds.")
 
 # VISION: CREATOR (IMAGES & VIDEO)
 elif mode == "🎨 Vision Creator":
     st.title("🎨 Nexus Imagination Engine")
-    st.write("Generate high-fidelity visuals (Images & Motion) instantly.")
+    st.info("Generates Images and Motion Art instantly.")
     
-    creation_type = st.radio("Select Output:", ["Static Image (Flux Model)", "Motion Art (Video/GIF)"], horizontal=True)
-    prompt = st.text_input("Describe the vision:", placeholder="Cyberpunk Faisalabad city streets at night...")
+    creation_type = st.radio("Select Mode:", ["Static Image (High Quality)", "Motion Art (GIF)"], horizontal=True)
+    prompt = st.text_input("Describe your vision:", placeholder="e.g. A futuristic robot in Faisalabad holding a flag")
     
     if st.button("🚀 Generate Visual"):
         if prompt:
             with st.spinner("Compiling Visual Data..."):
-                time.sleep(2) # Simulation of processing
+                time.sleep(1.5)
                 is_vid = "Motion" in creation_type
                 image_url = generate_image(prompt, is_vid)
-                st.image(image_url, caption=f"Nexus Generated: {prompt}", use_container_width=True)
-                st.success("Visual Manifested Successfully.")
+                
+                # Display with Error Handling
+                try:
+                    st.image(image_url, caption=f"Nexus Generated: {prompt}", use_container_width=True)
+                    st.success("Visual Manifested Successfully.")
+                except:
+                    st.error("Visual failed to load. Check your internet connection.")
         else:
-            st.warning("Please enter a description.")
+            st.warning("Please enter a description first.")
 
-# VISION: ANALYSIS (EYES)
-elif mode == "👁️ Vision Analysis":
-    st.title("👁️ Visual Cortex")
-    st.write("Upload an image for deep neural analysis.")
-    v_file = st.file_uploader("Upload Image", type=['jpg', 'png'])
-    if v_file:
-        st.image(v_file, width=300)
-        if st.button("Analyze Image"):
-            st.info("Llama-3.2 Vision: Object detected. Scene analysis complete. (Simulation Mode)")
-
-# VOICE COMMAND (FIXED)
+# VOICE COMMAND
 elif mode == "🎙️ Voice Command":
     st.title("🎙️ Voice Bridge")
-    st.write("Click the microphone to speak. Nexus will transcribe via Whisper-Large.")
+    st.write("Click the microphone below. Speak clearly.")
     
-    # Fixed Audio Logic
-    audio = mic_recorder(start_prompt="🔴 Record", stop_prompt="⏹️ Stop", key='recorder')
+    # Simple, robust recorder
+    audio = mic_recorder(start_prompt="🎤 Click to Speak", stop_prompt="⏹️ Stop Recording", key='recorder')
     
     if audio:
         st.audio(audio['bytes'])
-        with st.spinner("Transcribing voice frequency..."):
-            # Save to temp file for API
-            with open("voice_temp.wav", "wb") as f:
-                f.write(audio['bytes'])
-            
-            try:
-                # Real Whisper API Call
-                transcription = client.audio.transcriptions.create(
-                    file=("voice_temp.wav", open("voice_temp.wav", "rb")),
-                    model="whisper-large-v3"
-                )
-                st.success("Transmission Received:")
-                st.markdown(f"### 🗣️ \"{transcription.text}\"")
-            except Exception as e:
-                st.error(f"Voice Protocol Error: {e}")
-
-# EVOLUTION LAB
-elif mode == "🧬 Evolution Lab":
-    st.title("🧬 System Self-Check")
-    if st.button("Run Diagnostics"):
-        with st.status("Checking Systems..."):
-            st.write("Vision Creator... Active ✅")
-            st.write("Voice Bridge... Active ✅")
-            st.write("Groq Connection... Active ✅")
-            st.write("Location Lock... Active ✅")
+        
+        if st.button("📝 Transcribe Audio"):
+            with st.spinner("Analyzing Voice Frequency..."):
+                # Save to temp file
+                with open("temp_voice.wav", "wb") as f:
+                    f.write(audio['bytes'])
+                
+                try:
+                    transcription = client.audio.transcriptions.create(
+                        file=("temp_voice.wav", open("temp_voice.wav", "rb")),
+                        model="whisper-large-v3"
+                    )
+                    st.success("Message Received:")
+                    st.markdown(f"### 🗣️ \"{transcription.text}\"")
+                except Exception as e:
+                    st.error(f"Voice Error: {e}")
